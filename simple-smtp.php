@@ -1,13 +1,13 @@
 <?php
 /**
- * Plugin Name:       Simple SiteGround SMTP
+ * Plugin Name:       Simple SMTP
  * Plugin URI:        https://instagram.com/noman_imtiaz11
- * Description:       A very simple, lightweight and secure plugin to route WordPress emails through SiteGround (or any) SMTP server. No bloat, just what you need.
- * Version:           1.0.0
+ * Description:       A very simple, lightweight and secure plugin to route WordPress emails through any SMTP server (SiteGround, Gmail, Zoho, Mailgun, your host, etc). Just Host, Port, Username, Password. No bloat.
+ * Version:           1.1.0
  * Author:            Abdullah Al Noman
  * Author URI:        https://instagram.com/noman_imtiaz11
  * License:           GPL-2.0+
- * Text Domain:       simple-siteground-smtp
+ * Text Domain:       simple-smtp
  */
 
 // Exit if accessed directly.
@@ -15,14 +15,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SSGSMTP_OPTION_KEY', 'ssgsmtp_settings' );
+define( 'SSMTP_OPTION_KEY', 'ssmtp_settings' );
 
 /**
  * Get the saved settings, merged with defaults.
  */
-function ssgsmtp_get_settings() {
+function ssmtp_get_settings() {
 	$defaults = array(
-		'host'       => 'mail.yourdomain.com', // SiteGround: usually mail.<yourdomain>.com
+		'host'       => '',
 		'port'       => '465',
 		'encryption' => 'ssl', // ssl, tls, or none
 		'auth'       => '1',
@@ -32,16 +32,16 @@ function ssgsmtp_get_settings() {
 		'from_name'  => get_bloginfo( 'name' ),
 	);
 
-	$saved = get_option( SSGSMTP_OPTION_KEY, array() );
+	$saved = get_option( SSMTP_OPTION_KEY, array() );
 	return wp_parse_args( $saved, $defaults );
 }
 
 /**
  * Hook into PHPMailer to configure SMTP for every outgoing email.
  */
-add_action( 'phpmailer_init', 'ssgsmtp_configure_phpmailer' );
-function ssgsmtp_configure_phpmailer( $phpmailer ) {
-	$s = ssgsmtp_get_settings();
+add_action( 'phpmailer_init', 'ssmtp_configure_phpmailer' );
+function ssmtp_configure_phpmailer( $phpmailer ) {
+	$s = ssmtp_get_settings();
 
 	if ( empty( $s['host'] ) ) {
 		return; // Not configured yet — let WordPress use default mail().
@@ -61,7 +61,7 @@ function ssgsmtp_configure_phpmailer( $phpmailer ) {
 	if ( '1' === $s['auth'] ) {
 		$phpmailer->SMTPAuth = true;
 		$phpmailer->Username = $s['username'];
-		$phpmailer->Password = ssgsmtp_decrypt( $s['password'] );
+		$phpmailer->Password = ssmtp_decrypt( $s['password'] );
 	} else {
 		$phpmailer->SMTPAuth = false;
 	}
@@ -76,22 +76,22 @@ function ssgsmtp_configure_phpmailer( $phpmailer ) {
  * Uses WordPress salts as the key so the raw password is never stored plainly.
  * ---------------------------------------------------------------------- */
 
-function ssgsmtp_crypt_key() {
+function ssmtp_crypt_key() {
 	// Derive a stable 32-byte key from WP auth salts.
 	$material = ( defined( 'AUTH_KEY' ) ? AUTH_KEY : '' ) . ( defined( 'AUTH_SALT' ) ? AUTH_SALT : '' );
-	return hash( 'sha256', 'ssgsmtp' . $material, true );
+	return hash( 'sha256', 'ssmtp' . $material, true );
 }
 
-function ssgsmtp_encrypt( $plaintext ) {
+function ssmtp_encrypt( $plaintext ) {
 	if ( '' === $plaintext || ! function_exists( 'openssl_encrypt' ) ) {
 		return $plaintext;
 	}
 	$iv        = openssl_random_pseudo_bytes( 16 );
-	$encrypted = openssl_encrypt( $plaintext, 'aes-256-cbc', ssgsmtp_crypt_key(), OPENSSL_RAW_DATA, $iv );
+	$encrypted = openssl_encrypt( $plaintext, 'aes-256-cbc', ssmtp_crypt_key(), OPENSSL_RAW_DATA, $iv );
 	return base64_encode( $iv . $encrypted );
 }
 
-function ssgsmtp_decrypt( $stored ) {
+function ssmtp_decrypt( $stored ) {
 	if ( '' === $stored || ! function_exists( 'openssl_decrypt' ) ) {
 		return $stored;
 	}
@@ -101,7 +101,7 @@ function ssgsmtp_decrypt( $stored ) {
 	}
 	$iv        = substr( $raw, 0, 16 );
 	$encrypted = substr( $raw, 16 );
-	$decrypted = openssl_decrypt( $encrypted, 'aes-256-cbc', ssgsmtp_crypt_key(), OPENSSL_RAW_DATA, $iv );
+	$decrypted = openssl_decrypt( $encrypted, 'aes-256-cbc', ssmtp_crypt_key(), OPENSSL_RAW_DATA, $iv );
 	return ( false === $decrypted ) ? $stored : $decrypted;
 }
 
@@ -109,25 +109,25 @@ function ssgsmtp_decrypt( $stored ) {
  * Admin settings page
  * ---------------------------------------------------------------------- */
 
-add_action( 'admin_menu', 'ssgsmtp_admin_menu' );
-function ssgsmtp_admin_menu() {
+add_action( 'admin_menu', 'ssmtp_admin_menu' );
+function ssmtp_admin_menu() {
 	add_options_page(
-		'Simple SiteGround SMTP',
-		'SMTP Settings',
+		'Simple SMTP',
+		'Simple SMTP',
 		'manage_options',
-		'simple-siteground-smtp',
-		'ssgsmtp_settings_page'
+		'simple-smtp',
+		'ssmtp_settings_page'
 	);
 }
 
-add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'ssgsmtp_action_links' );
-function ssgsmtp_action_links( $links ) {
-	$url = admin_url( 'options-general.php?page=simple-siteground-smtp' );
+add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'ssmtp_action_links' );
+function ssmtp_action_links( $links ) {
+	$url = admin_url( 'options-general.php?page=simple-smtp' );
 	array_unshift( $links, '<a href="' . esc_url( $url ) . '">Settings</a>' );
 	return $links;
 }
 
-function ssgsmtp_settings_page() {
+function ssmtp_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
@@ -135,8 +135,8 @@ function ssgsmtp_settings_page() {
 	$notice = '';
 
 	// Handle "Save settings".
-	if ( isset( $_POST['ssgsmtp_save'] ) && check_admin_referer( 'ssgsmtp_save_settings' ) ) {
-		$current = ssgsmtp_get_settings();
+	if ( isset( $_POST['ssmtp_save'] ) && check_admin_referer( 'ssmtp_save_settings' ) ) {
+		$current = ssmtp_get_settings();
 
 		$new = array(
 			'host'       => sanitize_text_field( wp_unslash( $_POST['host'] ?? '' ) ),
@@ -151,24 +151,24 @@ function ssgsmtp_settings_page() {
 		// Only update the password if a new one was typed.
 		$typed_password = (string) wp_unslash( $_POST['password'] ?? '' );
 		if ( '' !== $typed_password ) {
-			$new['password'] = ssgsmtp_encrypt( $typed_password );
+			$new['password'] = ssmtp_encrypt( $typed_password );
 		} else {
 			$new['password'] = $current['password'];
 		}
 
-		update_option( SSGSMTP_OPTION_KEY, $new );
+		update_option( SSMTP_OPTION_KEY, $new );
 		$notice = 'Settings saved.';
 	}
 
 	// Handle "Send test email".
-	if ( isset( $_POST['ssgsmtp_test'] ) && check_admin_referer( 'ssgsmtp_send_test' ) ) {
+	if ( isset( $_POST['ssmtp_test'] ) && check_admin_referer( 'ssmtp_send_test' ) ) {
 		$to      = sanitize_email( wp_unslash( $_POST['test_to'] ?? '' ) );
 		$success = false;
 		if ( is_email( $to ) ) {
 			$success = wp_mail(
 				$to,
 				'Test email from ' . get_bloginfo( 'name' ),
-				"Success! Your Simple SiteGround SMTP plugin is working.\n\nSent: " . current_time( 'mysql' )
+				"Success! Your Simple SMTP plugin is working.\n\nSent: " . current_time( 'mysql' )
 			);
 		}
 		$notice = $success
@@ -176,29 +176,24 @@ function ssgsmtp_settings_page() {
 			: 'Test email FAILED to send. Double-check your SMTP settings below.';
 	}
 
-	$s = ssgsmtp_get_settings();
+	$s = ssmtp_get_settings();
 	?>
 	<div class="wrap">
-		<h1>Simple SiteGround SMTP</h1>
+		<h1>Simple SMTP</h1>
 
 		<?php if ( $notice ) : ?>
 			<div class="notice notice-info is-dismissible"><p><?php echo esc_html( $notice ); ?></p></div>
 		<?php endif; ?>
 
-		<p>Route all WordPress emails through your SiteGround SMTP server. For SiteGround, create an email account in Site Tools &rarr; Email &rarr; Accounts, then use these values:</p>
-		<ul style="list-style: disc; margin-left: 20px;">
-			<li><strong>Host:</strong> <code>mail.yourdomain.com</code></li>
-			<li><strong>Port / Encryption:</strong> <code>465</code> with <code>SSL</code> (or <code>587</code> with <code>TLS</code>)</li>
-			<li><strong>Username:</strong> the full email address you created</li>
-			<li><strong>Password:</strong> that email account's password</li>
-		</ul>
+		<p>Route all WordPress emails through any SMTP server. Enter the Host, Port, Username and Password given by your email/SMTP provider (SiteGround, Gmail, Zoho, Mailgun, your web host, etc).</p>
+		<p><strong>Common ports:</strong> <code>465</code> with <code>SSL</code>, or <code>587</code> with <code>TLS</code>.</p>
 
 		<form method="post" action="">
-			<?php wp_nonce_field( 'ssgsmtp_save_settings' ); ?>
+			<?php wp_nonce_field( 'ssmtp_save_settings' ); ?>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="host">SMTP Host</label></th>
-					<td><input name="host" id="host" type="text" class="regular-text" value="<?php echo esc_attr( $s['host'] ); ?>" placeholder="mail.yourdomain.com" /></td>
+					<td><input name="host" id="host" type="text" class="regular-text" value="<?php echo esc_attr( $s['host'] ); ?>" placeholder="smtp.yourprovider.com" /></td>
 				</tr>
 				<tr>
 					<th scope="row"><label for="port">SMTP Port</label></th>
@@ -237,21 +232,21 @@ function ssgsmtp_settings_page() {
 					<td><input name="from_name" id="from_name" type="text" class="regular-text" value="<?php echo esc_attr( $s['from_name'] ); ?>" /></td>
 				</tr>
 			</table>
-			<?php submit_button( 'Save Settings', 'primary', 'ssgsmtp_save' ); ?>
+			<?php submit_button( 'Save Settings', 'primary', 'ssmtp_save' ); ?>
 		</form>
 
 		<hr />
 
 		<h2>Send a Test Email</h2>
 		<form method="post" action="">
-			<?php wp_nonce_field( 'ssgsmtp_send_test' ); ?>
+			<?php wp_nonce_field( 'ssmtp_send_test' ); ?>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><label for="test_to">Send to</label></th>
 					<td><input name="test_to" id="test_to" type="email" class="regular-text" value="<?php echo esc_attr( wp_get_current_user()->user_email ); ?>" /></td>
 				</tr>
 			</table>
-			<?php submit_button( 'Send Test Email', 'secondary', 'ssgsmtp_test' ); ?>
+			<?php submit_button( 'Send Test Email', 'secondary', 'ssmtp_test' ); ?>
 		</form>
 	</div>
 	<?php
