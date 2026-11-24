@@ -50,6 +50,7 @@ function ssmtp_configure_phpmailer( $phpmailer ) {
 	$phpmailer->isSMTP();
 	$phpmailer->Host = $s['host'];
 	$phpmailer->Port = (int) $s['port'];
+	$phpmailer->Timeout = 10; // Don't let a slow SMTP server hang checkout (default is 300s).
 
 	if ( 'none' !== $s['encryption'] ) {
 		$phpmailer->SMTPSecure = $s['encryption']; // 'ssl' or 'tls'
